@@ -1,0 +1,69 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function bootstrapPath() {
+      return /databases/$(database)/documents/system/bootstrap;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function validProfile(data, profileUid, profileRole) {
+      return data.keys().hasOnly([
+          'name', 'username', 'email', 'phone', 'role', 'uid', 'createdAt'
+        ])
+        && data.keys().hasAll([
+          'name', 'username', 'email', 'role', 'uid', 'createdAt'
+        ])
+        && data.name is string
+        && data.username is string
+        && data.email is string
+        && data.uid == profileUid
+        && data.role == profileRole
+        && data.createdAt is string;
+    }
+
+    match /system/bootstrap {
+      allow read: if true;
+      allow create: if signedIn()
+        && !exists(bootstrapPath())
+        && request.auth.token.email_verified == true
+        && request.resource.data.keys().hasOnly(['adminUid', 'createdAt'])
+        && request.resource.data.adminUid == request.auth.uid
+        && request.auth.token.email == 'konyangodancan@gmail.com';
+      allow update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn()
+        && validProfile(request.resource.data, userId, request.resource.data.role)
+        && (
+          (
+            userId == request.auth.uid
+            && request.resource.data.role == 'admin'
+            && request.auth.token.email_verified == true
+            && request.auth.token.email == 'konyangodancan@gmail.com'
+            && request.resource.data.email == request.auth.token.email
+            && !exists(bootstrapPath())
+            && getAfter(bootstrapPath()).data.adminUid == request.auth.uid
+          )
+          || (
+            isAdmin()
+            && request.resource.data.role == 'cashier'
+          )
+        );
+      allow update: if false;
+      allow delete: if isAdmin() && resource.data.role == 'cashier';
+    }
+  }
+}
