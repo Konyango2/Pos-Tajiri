@@ -2579,6 +2579,11 @@ function renderCustomersPanel() {
 function renderStaffPanel() {
   const list = document.querySelector("#staffList");
   if (!list) return;
+  const adminCount = users.filter((user) => user.role === "admin").length;
+  const adminCountLabel = document.querySelector("#adminAccountCount");
+  if (adminCountLabel) {
+    adminCountLabel.textContent = `Administrators: ${adminCount}/3`;
+  }
   list.innerHTML = users
     .map(
       (u) =>
@@ -4230,16 +4235,22 @@ document
 document.querySelector("#addAccountButton")?.addEventListener("click", () => {
   if (currentUser?.role !== "admin")
     return showToast("Admin permission required");
+  const adminCount = users.filter((user) => user.role === "admin").length;
+  const adminOption =
+    adminCount >= 3
+      ? '<option value="admin" disabled>Administrator (limit reached)</option>'
+      : '<option value="admin">Administrator</option>';
   openModal(
-    "Create cashier account",
+    "Create staff account",
     `
     <label>Full name<input id="newAccountName" required></label>
     <label>Username<input id="newAccountUsername" autocomplete="username" required></label>
     <label>Email<input id="newAccountEmail" type="email" autocomplete="email" required></label>
     <label>Phone (optional)<input id="newAccountPhone" type="tel" inputmode="tel" placeholder="07XXXXXXXX or +2547XXXXXXX"></label>
     <label>Password<input id="newAccountPassword" type="password" autocomplete="new-password" minlength="6" required></label>
-    <p class="modal-note">Only an administrator can create cashier logins. The cashier verifies this email, then signs in with it and the password on any browser.</p>`,
-    actionButtons("Create cashier"),
+    <label>Role<select id="newAccountRole"><option value="cashier">Cashier</option>${adminOption}</select></label>
+    <p class="modal-note">Up to 3 administrator accounts are allowed, including the first administrator. Current count: ${adminCount}/3. New staff must verify their email before signing in.</p>`,
+    actionButtons("Create account"),
   );
 });
 
@@ -4389,8 +4400,14 @@ document.addEventListener("click", async (event) => {
   if (newAccountName) {
     if (currentUser?.role !== "admin")
       return showToast("Admin permission required");
-    if (!window.firebaseAuth || !window.firebaseDb || !window.TAJIRI_FIREBASE_CONFIG)
-      return showToast("Cloud account creation is unavailable. Check the Firebase setup and try again.");
+    if (
+      !window.firebaseAuth ||
+      !window.firebaseDb ||
+      !window.TAJIRI_FIREBASE_CONFIG
+    )
+      return showToast(
+        "Cloud account creation is unavailable. Check the Firebase setup and try again.",
+      );
     const name = newAccountName.value.trim();
     const username = document
       .querySelector("#newAccountUsername")
@@ -4402,8 +4419,10 @@ document.addEventListener("click", async (event) => {
       .toLowerCase();
     const phone = document.querySelector("#newAccountPhone").value.trim();
     const password = document.querySelector("#newAccountPassword").value;
+    const role = document.querySelector("#newAccountRole").value;
+    const adminCount = users.filter((user) => user.role === "admin").length;
     if (!name || !username || !email || !password)
-      return showToast("Complete all required cashier details");
+      return showToast("Complete all required staff details");
     if (!/^[a-z0-9._-]{2,60}$/i.test(username))
       return showToast(
         "Username must be 2–60 characters using letters, numbers, dots, underscores, or hyphens",
@@ -4413,7 +4432,11 @@ document.addEventListener("click", async (event) => {
     if (phone && !normalizeKenyanPhone(phone))
       return showToast("Enter a valid Kenyan phone number");
     if (password.length < 6)
-      return showToast("Cashier password must be at least 6 characters");
+      return showToast("Password must be at least 6 characters");
+    if (!["admin", "cashier"].includes(role))
+      return showToast("Choose a valid staff role");
+    if (role === "admin" && adminCount >= 3)
+      return showToast("The store already has the maximum of 3 administrators");
     if (
       users.some(
         (user) =>
@@ -4427,7 +4450,7 @@ document.addEventListener("click", async (event) => {
     try {
       secondaryApp = firebase.initializeApp(
         window.TAJIRI_FIREBASE_CONFIG,
-        `tajiri-cashier-${Date.now()}`,
+        `tajiri-staff-${Date.now()}`,
       );
       const secondaryAuth = secondaryApp.auth();
       const credential = await secondaryAuth.createUserWithEmailAndPassword(
@@ -4436,38 +4459,71 @@ document.addEventListener("click", async (event) => {
       );
       createdFirebaseUser = credential.user;
       await credential.user.sendEmailVerification();
-      const cashier = {
+      const staffAccount = {
         name,
         username,
         email,
         phone: phone ? normalizeKenyanPhone(phone) : "",
-        role: "cashier",
+        role,
         uid: credential.user.uid,
         createdAt: new Date().toISOString(),
       };
-      await window.firebaseDb.collection("users").doc(credential.user.uid).set(cashier);
-      users.push(cashier);
+      const userRef = window.firebaseDb
+        .collection("users")
+        .doc(credential.user.uid);
+      if (role === "admin") {
+        const bootstrapRef = window.firebaseDb
+          .collection("system")
+          .doc("bootstrap");
+        await window.firebaseDb.runTransaction(async (transaction) => {
+          const bootstrapSnapshot = await transaction.get(bootstrapRef);
+          if (!bootstrapSnapshot.exists)
+            throw new Error("Administrator setup has not been completed.");
+          const bootstrap = bootstrapSnapshot.data();
+          const currentAdminCount = Number(bootstrap.adminCount ?? 1);
+          if (
+            !Number.isSafeInteger(currentAdminCount) ||
+            currentAdminCount < 1
+          )
+            throw new Error("The administrator count is invalid.");
+          if (currentAdminCount >= 3)
+            throw new Error("The store already has the maximum of 3 administrators.");
+          transaction.update(bootstrapRef, {
+            adminCount: currentAdminCount + 1,
+            lastAdminUid: credential.user.uid,
+          });
+          transaction.set(userRef, staffAccount);
+        });
+      } else {
+        await userRef.set(staffAccount);
+      }
+      users.push(staffAccount);
       const stateSaved = saveState();
       renderStaffPanel();
       closeModal();
       showToast(
         stateSaved
-          ? `Cashier account created for ${name}`
+          ? `${role === "admin" ? "Administrator" : "Cashier"} account created for ${name}`
           : `Cloud account created for ${name}, but this device could not update its local roster.`,
       );
     } catch (error) {
-      console.error("Could not create Firebase cashier account:", error);
+      console.error("Could not create Firebase staff account:", error);
       if (createdFirebaseUser) {
         try {
           await createdFirebaseUser.delete();
         } catch (cleanupError) {
-          console.error("Could not clean up the incomplete cashier account:", cleanupError);
+          console.error("Could not clean up the incomplete staff account:", cleanupError);
         }
       }
       showToast(
         error.code === "auth/email-already-in-use"
           ? "That email already has a Firebase account."
-          : "Could not create the cloud account. Check Firebase Auth and Firestore rules.",
+          : error.message ===
+              "The store already has the maximum of 3 administrators."
+            ? error.message
+            : error.message === "The administrator count is invalid."
+              ? `${error.message} Contact your system administrator.`
+              : "Could not create the cloud account. Check Firebase Auth and Firestore rules.",
       );
     } finally {
       if (secondaryApp) {

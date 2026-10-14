@@ -37,10 +37,36 @@ service cloud.firestore {
       allow create: if signedIn()
         && !exists(bootstrapPath())
         && request.auth.token.email_verified == true
-        && request.resource.data.keys().hasOnly(['adminUid', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['adminUid', 'adminCount', 'createdAt'])
         && request.resource.data.adminUid == request.auth.uid
+        && request.resource.data.adminCount is int
+        && request.resource.data.adminCount == 1
         && request.auth.token.email == 'konyangodancan@gmail.com';
-      allow update, delete: if false;
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'adminUid', 'adminCount', 'createdAt', 'lastAdminUid'
+        ])
+        && request.resource.data.keys().hasAll([
+          'adminUid', 'adminCount', 'createdAt', 'lastAdminUid'
+        ])
+        && request.resource.data.adminUid == resource.data.adminUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && resource.data.get('adminCount', 1) is int
+        && request.resource.data.adminCount is int
+        && request.resource.data.adminCount
+          == resource.data.get('adminCount', 1) + 1
+        && request.resource.data.adminCount <= 3
+        && request.resource.data.lastAdminUid is string
+        && !exists(
+          /databases/$(database)/documents/users/$(request.resource.data.lastAdminUid)
+        )
+        && getAfter(
+          /databases/$(database)/documents/users/$(request.resource.data.lastAdminUid)
+        ).data.role == 'admin'
+        && getAfter(
+          /databases/$(database)/documents/users/$(request.resource.data.lastAdminUid)
+        ).data.uid == request.resource.data.lastAdminUid;
+      allow delete: if false;
     }
 
     match /users/{userId} {
@@ -60,6 +86,15 @@ service cloud.firestore {
           || (
             isAdmin()
             && request.resource.data.role == 'cashier'
+          )
+          || (
+            isAdmin()
+            && request.resource.data.role == 'admin'
+            && exists(bootstrapPath())
+            && get(bootstrapPath()).data.get('adminCount', 1) is int
+            && getAfter(bootstrapPath()).data.adminCount
+              == get(bootstrapPath()).data.get('adminCount', 1) + 1
+            && getAfter(bootstrapPath()).data.lastAdminUid == userId
           )
         );
       allow update: if false;

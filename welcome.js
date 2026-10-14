@@ -109,7 +109,8 @@
     if (!modal) return;
     lastFocusedElement = trigger instanceof HTMLElement ? trigger : null;
     modal.hidden = false;
-    modal.querySelector("input:not([type=hidden]), button, a")?.focus();
+    const firstInput = modal.querySelector("input:not([type=hidden])");
+    (firstInput || modal.querySelector("button, a"))?.focus();
   }
 
   function closeModal(modal) {
@@ -148,6 +149,9 @@
   const firstAdminEmail = "konyangodancan@gmail.com";
   function setAdminSignupAllowed(allowed) {
     adminSignupAllowed = Boolean(allowed && roleShell === "admin");
+    accessModal
+      .querySelector(".auth-card")
+      ?.classList.toggle("signup-unavailable", !adminSignupAllowed);
     const signupTab = document.querySelector("#tabSignup");
     const signupForm = document.querySelector("#signupForm");
     const signupSwitch = document.querySelector("#signupSwitch");
@@ -156,10 +160,26 @@
     if (adminSetupButton) adminSetupButton.hidden = !adminSignupAllowed;
     if (signupTab) {
       signupTab.hidden = !adminSignupAllowed;
-      if (adminSignupAllowed) signupTab.textContent = "Admin sign up";
+      if (adminSignupAllowed) signupTab.textContent = "Create admin account";
     }
     if (signupForm) signupForm.hidden = !adminSignupAllowed;
     if (signupSwitch) signupSwitch.hidden = !adminSignupAllowed;
+    const signupSwitchButton = signupSwitch?.querySelector("button");
+    if (signupSwitchButton) {
+      signupSwitchButton.textContent = "Create first admin account";
+    }
+    if (adminSetupButton && adminSignupAllowed) {
+      adminSetupButton.textContent = "Create first admin account";
+    }
+    const signupHeading = signupForm?.querySelector("h2");
+    const signupDescription = signupForm?.querySelector(".auth-sub");
+    if (adminSignupAllowed) {
+      if (signupHeading) signupHeading.textContent = "Create admin account";
+      if (signupDescription) {
+        signupDescription.textContent =
+          "Set up the first administrator. Signup closes after setup is complete.";
+      }
+    }
     if (signupRole) {
       signupRole.value = "admin";
       signupRole.closest("label")?.setAttribute("hidden", "");
@@ -172,15 +192,57 @@
       .collection("system")
       .doc("bootstrap")
       .get()
-      .then(snapshot => setAdminSignupAllowed(!snapshot.exists))
+      .then(snapshot => {
+        setAdminSignupAllowed(!snapshot.exists);
+        clearError("adminSetupError");
+      })
       .catch(error => {
         console.error("Could not check Firebase admin setup:", error);
-        showToast("Could not check cloud setup. Verify Firestore is enabled and try again.");
+        setAdminSignupAllowed(true);
+        showError(
+          "adminSetupError",
+          "Setup status could not be checked. Registration will verify setup before creating an account.",
+        );
+        showToast("Could not check cloud setup. Registration will retry the setup check.");
       });
   } else {
     setAdminSignupAllowed(false);
+    if (roleShell === "admin" && !window.__tajiriFirebaseError) {
+      showError(
+        "adminSetupError",
+        "First-time administrator signup requires Firebase Authentication and Firestore.",
+      );
+    }
   }
   setActiveTab("login");
+  if (roleShell === "admin") {
+    const heroTitle = document.querySelector("#welcomeHeroTitle");
+    if (heroTitle) heroTitle.textContent = "Admin sign in";
+    const welcomeTagline = document.querySelector("#welcomeTagline");
+    if (welcomeTagline) {
+      welcomeTagline.textContent =
+        "Secure access to your store, staff, inventory, and reports.";
+    }
+    const modalHeading = accessModal.querySelector(".modal-head h2");
+    if (modalHeading) modalHeading.textContent = "Admin sign in";
+    accessModal.setAttribute("aria-label", "Administrator sign in");
+    accessModal
+      .querySelector('[role="dialog"]')
+      ?.setAttribute("aria-label", "Administrator sign in");
+    const loginHeading = document.querySelector("#loginForm h2");
+    if (loginHeading) loginHeading.textContent = "Welcome back";
+    const loginDescription = document.querySelector("#loginForm .auth-sub");
+    if (loginDescription) {
+      loginDescription.textContent =
+        "Sign in with your administrator email and password.";
+    }
+    const loginTrigger = document.querySelector(
+      '[data-modal-open="modal-access"][data-auth-tab="login"]',
+    );
+    if (loginTrigger) loginTrigger.textContent = "Admin sign in";
+    const signupEmail = document.querySelector("#signupEmail");
+    if (signupEmail) signupEmail.placeholder = firstAdminEmail;
+  }
   if (roleShell === "cashier") {
     const heroTitle = document.querySelector("#welcomeHeroTitle");
     if (heroTitle) heroTitle.textContent = "Cashier sign in";
@@ -205,7 +267,13 @@
   document.querySelector("#welcomeBrandName")?.replaceChildren(document.createTextNode(brand));
   document.querySelector("#welcomeFooterBrand")?.replaceChildren(document.createTextNode(brand));
   document.querySelector("#welcomeTagline")?.replaceChildren(document.createTextNode(tagline));
-  if (roleShell === "cashier") {
+  if (roleShell === "admin") {
+    const welcomeTagline = document.querySelector("#welcomeTagline");
+    if (welcomeTagline) {
+      welcomeTagline.textContent =
+        "Secure access to your store, staff, inventory, and reports.";
+    }
+  } else if (roleShell === "cashier") {
     const welcomeTagline = document.querySelector("#welcomeTagline");
     if (welcomeTagline)
       welcomeTagline.textContent = "Sign in to start your shift and process sales.";
@@ -217,7 +285,9 @@
     heroAccounts.textContent = "";
     heroAccounts.hidden = true;
   }
-  if (roleShell === "cashier") openModal(accessModal);
+  if (roleShell === "admin" || roleShell === "cashier") {
+    openModal(accessModal);
+  }
 
   document.addEventListener("click", event => {
     const target = event.target;
@@ -369,6 +439,7 @@
               }
               transaction.set(bootstrapRef, {
                 adminUid: credential.user.uid,
+                adminCount: 1,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               });
               transaction.set(
@@ -437,8 +508,8 @@
       );
       return;
     }
-    if (!adminSignupAllowed) {
-      showError("signupError", "Ask an administrator to create your cashier account.");
+    if (roleShell !== "admin" || !adminSignupAllowed) {
+      showError("signupError", "First administrator registration is unavailable. Sign in or contact your system administrator.");
       return;
     }
 
@@ -472,6 +543,20 @@
       submit.textContent = "Creating account…";
     }
     try {
+      const bootstrapSnapshot = await window.firebaseDb
+        .collection("system")
+        .doc("bootstrap")
+        .get();
+      if (bootstrapSnapshot.exists) {
+        setAdminSignupAllowed(false);
+        setActiveTab("login");
+        showError(
+          "adminSetupError",
+          "Administrator setup is already complete. Sign in with your administrator account.",
+        );
+        return;
+      }
+
       await window.firebaseAuth.setPersistence(
         firebase.auth.Auth.Persistence.SESSION,
       );
@@ -498,7 +583,13 @@
       }
     } catch (error) {
       console.error("Tajiri POS account creation failed:", error);
-      showError("signupError", "The account could not be created. Please try again.");
+      showError(
+        "signupError",
+        error.code === "permission-denied" ||
+          error.code === "firestore/permission-denied"
+          ? "Could not verify first-admin setup. Publish the Firestore rules from firestore.rules, then try again."
+          : "The account could not be created. Check Firebase Authentication setup and try again.",
+      );
     } finally {
       if (submit) {
         submit.disabled = false;

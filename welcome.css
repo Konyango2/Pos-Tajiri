@@ -304,6 +304,108 @@ body[data-role-view="cashier"] .auth-submit {
 }
 body[data-role-view="cashier"] .page-footer { color: #7f9388; }
 
+body[data-role-view="admin"] .site-nav {
+  justify-content: center;
+  border-bottom-color: rgba(143, 197, 255, .12);
+}
+body[data-role-view="admin"] .site-nav .nav-more { display: none; }
+body[data-role-view="admin"] .download-link { display: none; }
+body[data-role-view="admin"] .home-section {
+  min-height: min(650px, calc(100vh - 142px));
+  padding-block: 48px;
+}
+body[data-role-view="admin"] .hero-card { width: min(100%, 620px); }
+body[data-role-view="admin"] .hero-avatar {
+  width: 68px;
+  height: 68px;
+  margin-bottom: 22px;
+  border-color: rgba(143, 197, 255, .4);
+  background: linear-gradient(145deg, #c3e1ff, #6caaf2);
+  box-shadow: 0 16px 50px rgba(74, 139, 214, .24);
+  color: #102039;
+  font-size: 42px;
+}
+body[data-role-view="admin"] .grad { color: var(--welcome-blue); }
+body[data-role-view="admin"] .tagline {
+  max-width: 38ch;
+  margin-top: 14px;
+  font-size: 15px;
+}
+body[data-role-view="admin"] .hero-actions { margin-top: 25px; }
+body[data-role-view="admin"] .hero-actions [data-auth-tab="login"] {
+  border-color: #8fc5ff;
+  background: #8fc5ff;
+  color: #102039;
+  box-shadow: 0 10px 28px rgba(74, 139, 214, .2);
+}
+body[data-role-view="admin"] .hero-actions [data-auth-tab="login"]:hover {
+  background: #b2d8ff;
+}
+body[data-role-view="admin"] .hero-actions #adminSetupButton {
+  border-color: rgba(143, 197, 255, .28);
+  background: rgba(143, 197, 255, .06);
+  color: #c7e2ff;
+  box-shadow: none;
+}
+body[data-role-view="admin"] .hero-action.primary {
+  border-color: #8fc5ff;
+  background: #8fc5ff;
+  color: #102039;
+  box-shadow: 0 10px 28px rgba(74, 139, 214, .2);
+}
+body[data-role-view="admin"] .hero-action.primary:hover {
+  background: #b2d8ff;
+}
+body[data-role-view="admin"] .modal-layer {
+  background: rgba(5, 9, 16, .74);
+  backdrop-filter: blur(14px);
+}
+body[data-role-view="admin"] .auth-card {
+  width: min(100%, 460px);
+  border-color: rgba(143, 197, 255, .27);
+  border-radius: 22px;
+  box-shadow: 0 32px 100px rgba(0, 0, 0, .6), 0 0 60px rgba(74, 139, 214, .1);
+}
+body[data-role-view="admin"] .auth-card .modal-head {
+  padding: 22px 25px 17px;
+  border-bottom-color: rgba(143, 197, 255, .12);
+  background: linear-gradient(145deg, #1b2635, #141d2a);
+}
+body[data-role-view="admin"] .auth-card .modal-head h2 { font-size: 20px; }
+body[data-role-view="admin"] .auth-card > .modal-body { padding: 4px 25px 27px; }
+body[data-role-view="admin"] .auth-form { gap: 15px; }
+body[data-role-view="admin"] .auth-card.signup-unavailable .auth-tabs {
+  grid-template-columns: 1fr;
+}
+body[data-role-view="admin"] .auth-form h2 { font-size: 25px; }
+body[data-role-view="admin"] .auth-form > label { gap: 8px; font-size: 13px; }
+body[data-role-view="admin"] .auth-form input {
+  min-height: 49px;
+  padding-inline: 14px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+body[data-role-view="admin"] .auth-form input:focus {
+  border-color: var(--welcome-blue);
+  box-shadow: 0 0 0 3px rgba(143, 197, 255, .13);
+}
+body[data-role-view="admin"] .auth-link,
+body[data-role-view="admin"] .auth-switch button { color: var(--welcome-blue); }
+body[data-role-view="admin"] .auth-submit {
+  min-height: 50px;
+  margin-top: 2px;
+  border-radius: 11px;
+  background: var(--welcome-blue);
+  color: #102039;
+  font-size: 14px;
+}
+body[data-role-view="admin"] .auth-submit:hover { background: #b2d8ff; }
+body[data-role-view="admin"] .auth-error {
+  border-color: rgba(255, 132, 151, .24);
+  background: rgba(255, 132, 151, .08);
+}
+body[data-role-view="admin"] .page-footer { color: #8999ad; }
+
 @media (max-width: 680px) {
   .site-nav { width: calc(100% - 32px); height: 66px; }
   .home-section { min-height: 620px; min-height: calc(100svh - 125px); padding: 54px 18px; }
@@ -313,6 +415,9 @@ body[data-role-view="cashier"] .page-footer { color: #7f9388; }
   body[data-role-view="cashier"] .home-section { min-height: calc(100svh - 125px); }
   body[data-role-view="cashier"] .auth-card > .modal-body { padding-inline: 18px; }
   body[data-role-view="cashier"] .auth-card .modal-head { padding-inline: 18px; }
+  body[data-role-view="admin"] .home-section { min-height: calc(100svh - 125px); }
+  body[data-role-view="admin"] .auth-card > .modal-body { padding-inline: 18px; }
+  body[data-role-view="admin"] .auth-card .modal-head { padding-inline: 18px; }
   .showcase { grid-template-columns: 1fr; }.showcase-shot { min-height: 175px; }.shot-cols { min-height: 130px; }
   .download-grid { grid-template-columns: 1fr; }.dl-card { min-height: 75px; }
 }
